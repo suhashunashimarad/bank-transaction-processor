@@ -17,14 +17,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 
 import java.util.stream.Collectors;
 
-/**
- * Translates domain rule violations into RFC 9457 problem responses.
- * <ul>
- *   <li>400 - the request itself is wrong (bad amount, transfer to self, missing fields)</li>
- *   <li>404 - an account in the request does not exist</li>
- *   <li>422 - the request is well-formed but the account cannot afford it</li>
- * </ul>
- */
 @RestControllerAdvice
 class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 

@@ -224,11 +224,6 @@ class BankingServiceTest {
         return id;
     }
 
-    /**
-     * Not try-with-resources: {@code ExecutorService.close()} waits for every task, so a
-     * deadlock would hang the build instead of failing the test. Daemon threads let the
-     * JVM exit even if some workers are stuck on a monitor.
-     */
     private static <T> List<T> runConcurrently(int tasks, Callable<T> task) throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(16, Thread.ofPlatform().daemon().factory());
         try {

@@ -14,10 +14,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Entry point for every banking operation: looks accounts up, stamps the time,
- * and coordinates the two accounts involved in a transfer.
- */
 @Service
 public class BankingService {
 
@@ -49,14 +45,6 @@ public class BankingService {
         return find(accountId).withdraw(amount, clock.instant());
     }
 
-    /**
-     * Moves money between two accounts atomically: either both ledgers record the
-     * transfer or neither does.
-     * <p>
-     * Both accounts are locked for the duration. Locks are always taken in account-id
-     * order, so two opposing transfers (A to B, B to A) cannot deadlock each other.
-     * The debit runs first because it is the only leg that can fail.
-     */
     public Transfer transfer(String fromAccountId, String toAccountId, Amount amount) {
         if (fromAccountId.equals(toAccountId)) {
             throw new InvalidTransferException("Cannot transfer from account %s to itself".formatted(fromAccountId));

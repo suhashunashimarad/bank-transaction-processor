@@ -7,13 +7,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * A bank account that owns its balance and the ledger explaining how it got there.
- * <p>
- * The balance and ledger only ever change together, inside one synchronized method, so a
- * reader can never observe a balance that disagrees with the ledger. An operation that
- * would overdraw the account is rejected before anything is changed.
- */
 public class Account {
 
     private final String id;
