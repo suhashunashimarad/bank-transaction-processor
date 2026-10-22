@@ -25,8 +25,8 @@ public class BankingService {
         this.clock = clock;
     }
 
-    public Account openAccount(String ownerId) {
-        return accounts.save(new Account(UUID.randomUUID().toString(), ownerId));
+    public Account openAccount() {
+        return accounts.save(new Account(UUID.randomUUID().toString()));
     }
 
     public BigDecimal balanceOf(String accountId) {

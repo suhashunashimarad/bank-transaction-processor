@@ -9,7 +9,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -39,11 +38,6 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler
     ProblemDetail handle(InvalidTransferException e) {
         return problem(HttpStatus.BAD_REQUEST, "Invalid transfer", e);
-    }
-
-    @ExceptionHandler
-    ProblemDetail handle(AccessDeniedException e) {
-        return problem(HttpStatus.FORBIDDEN, "Access denied", e);
     }
 
     @Override

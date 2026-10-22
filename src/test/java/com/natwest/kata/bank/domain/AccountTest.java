@@ -14,18 +14,12 @@ class AccountTest {
 
     private static final Instant NOW = Instant.parse("2026-04-20T09:00:00Z");
 
-    private final Account account = new Account("ACC-1", "alice");
+    private final Account account = new Account("ACC-1");
 
     @Test
     void a_new_account_has_a_zero_balance_and_an_empty_ledger() {
         assertThat(account.balance()).isEqualByComparingTo("0");
         assertThat(account.ledger()).isEmpty();
-    }
-
-    @Test
-    void is_owned_only_by_the_customer_it_was_opened_for() {
-        assertThat(account.isOwnedBy("alice")).isTrue();
-        assertThat(account.isOwnedBy("bob")).isFalse();
     }
 
     @Nested

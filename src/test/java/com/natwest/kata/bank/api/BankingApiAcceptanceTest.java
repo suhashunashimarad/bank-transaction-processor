@@ -9,12 +9,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -25,18 +23,33 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class BankingApiAcceptanceTest {
 
-    private static final RequestPostProcessor ALICE = customer("alice");
-    private static final RequestPostProcessor BOB = customer("bob");
-
     @Autowired
     private MockMvc mvc;
+
+    @Nested
+    class Documentation {
+
+        @Test
+        void publishes_an_openapi_description_of_every_endpoint() throws Exception {
+            mvc.perform(get("/v3/api-docs"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.paths['/accounts']").exists())
+                    .andExpect(jsonPath("$.paths['/transfers']").exists());
+        }
+
+        @Test
+        void serves_the_swagger_ui() throws Exception {
+            mvc.perform(get("/swagger-ui/index.html"))
+                    .andExpect(status().isOk());
+        }
+    }
 
     @Nested
     class OpeningAnAccount {
 
         @Test
         void returns_the_new_account_with_a_zero_balance() throws Exception {
-            mvc.perform(post("/accounts").with(ALICE))
+            mvc.perform(post("/accounts"))
                     .andExpect(status().isCreated())
                     .andExpect(header().string("Location", containsString("/accounts/")))
                     .andExpect(jsonPath("$.accountId", notNullValue()))
@@ -51,7 +64,7 @@ class BankingApiAcceptanceTest {
         void returns_its_current_balance() throws Exception {
             String id = openAccountWith("125.50");
 
-            mvc.perform(get("/accounts/{id}", id).with(ALICE))
+            mvc.perform(get("/accounts/{id}", id))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.accountId").value(id))
                     .andExpect(jsonPath("$.balance").value(125.50));
@@ -62,7 +75,7 @@ class BankingApiAcceptanceTest {
             String id = openAccountWith("100.00");
             moneyRequest(id, "withdrawals", "40.00");
 
-            mvc.perform(get("/accounts/{id}/transactions", id).with(ALICE))
+            mvc.perform(get("/accounts/{id}/transactions", id))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$", hasSize(2)))
                     .andExpect(jsonPath("$[0].type").value("DEPOSIT"))
@@ -76,11 +89,11 @@ class BankingApiAcceptanceTest {
 
         @Test
         void that_does_not_exist_is_not_found() throws Exception {
-            mvc.perform(get("/accounts/{id}", "unknown").with(ALICE))
+            mvc.perform(get("/accounts/{id}", "unknown"))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.detail").value("Account unknown does not exist"));
 
-            mvc.perform(get("/accounts/{id}/transactions", "unknown").with(ALICE))
+            mvc.perform(get("/accounts/{id}/transactions", "unknown"))
                     .andExpect(status().isNotFound());
         }
     }
@@ -128,7 +141,6 @@ class BankingApiAcceptanceTest {
         @Test
         void a_missing_amount_is_a_bad_request() throws Exception {
             mvc.perform(post("/accounts/{id}/deposits", openAccount())
-                            .with(ALICE)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
                     .andExpect(status().isBadRequest());
@@ -137,7 +149,6 @@ class BankingApiAcceptanceTest {
         @Test
         void a_malformed_body_is_a_bad_request() throws Exception {
             mvc.perform(post("/accounts/{id}/deposits", openAccount())
-                            .with(ALICE)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"amount\": \"lots\"}"))
                     .andExpect(status().isBadRequest());
@@ -165,9 +176,9 @@ class BankingApiAcceptanceTest {
                     .andExpect(jsonPath("$.toAccountId").value(bob))
                     .andExpect(jsonPath("$.amount").value(30.00));
 
-            mvc.perform(get("/accounts/{id}", alice).with(ALICE)).andExpect(jsonPath("$.balance").value(70.00));
-            mvc.perform(get("/accounts/{id}", bob).with(ALICE)).andExpect(jsonPath("$.balance").value(30.00));
-            mvc.perform(get("/accounts/{id}/transactions", bob).with(ALICE))
+            mvc.perform(get("/accounts/{id}", alice)).andExpect(jsonPath("$.balance").value(70.00));
+            mvc.perform(get("/accounts/{id}", bob)).andExpect(jsonPath("$.balance").value(30.00));
+            mvc.perform(get("/accounts/{id}/transactions", bob))
                     .andExpect(jsonPath("$[0].type").value("TRANSFER_IN"))
                     .andExpect(jsonPath("$[0].counterpartyAccountId").value(alice));
         }
@@ -196,7 +207,6 @@ class BankingApiAcceptanceTest {
         @Test
         void without_both_accounts_is_a_bad_request() throws Exception {
             mvc.perform(post("/transfers")
-                            .with(ALICE)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"fromAccountId\": \"a\", \"amount\": 1.00}"))
                     .andExpect(status().isBadRequest())
@@ -204,70 +214,8 @@ class BankingApiAcceptanceTest {
         }
     }
 
-    @Nested
-    class Security {
-
-        @Test
-        void a_request_without_a_bearer_token_is_unauthorized() throws Exception {
-            mvc.perform(post("/accounts")).andExpect(status().isUnauthorized());
-            mvc.perform(get("/accounts/{id}", openAccount())).andExpect(status().isUnauthorized());
-            mvc.perform(post("/transfers")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("{}"))
-                    .andExpect(status().isUnauthorized());
-        }
-
-        @Test
-        void a_customer_cannot_see_someone_elses_account() throws Exception {
-            String alices = openAccountWith("10.00");
-
-            mvc.perform(get("/accounts/{id}", alices).with(BOB))
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.title").value("Access denied"));
-            mvc.perform(get("/accounts/{id}/transactions", alices).with(BOB))
-                    .andExpect(status().isForbidden());
-        }
-
-        @Test
-        void a_customer_cannot_deposit_into_or_withdraw_from_someone_elses_account() throws Exception {
-            String alices = openAccountWith("10.00");
-
-            moneyRequest(BOB, alices, "deposits", "1.00").andExpect(status().isForbidden());
-            moneyRequest(BOB, alices, "withdrawals", "1.00").andExpect(status().isForbidden());
-
-            mvc.perform(get("/accounts/{id}", alices).with(ALICE)).andExpect(jsonPath("$.balance").value(10.00));
-        }
-
-        @Test
-        void a_customer_cannot_transfer_out_of_someone_elses_account() throws Exception {
-            String alices = openAccountWith("10.00");
-            String bobs = openAccount(BOB);
-
-            transfer(BOB, alices, bobs, "1.00").andExpect(status().isForbidden());
-
-            mvc.perform(get("/accounts/{id}", alices).with(ALICE)).andExpect(jsonPath("$.balance").value(10.00));
-        }
-
-        @Test
-        void a_customer_can_transfer_into_someone_elses_account() throws Exception {
-            String bobs = openAccount(BOB);
-
-            transfer(openAccountWith("10.00"), bobs, "4.00").andExpect(status().isCreated());
-
-            mvc.perform(get("/accounts/{id}", bobs).with(BOB)).andExpect(jsonPath("$.balance").value(4.00));
-        }
-    }
-
-    private static RequestPostProcessor customer(String subject) {
-        return jwt().jwt(token -> token.subject(subject));
-    }
-
     private String openAccount() throws Exception {
-        return openAccount(ALICE);
-    }
-
-    private String openAccount(RequestPostProcessor customer) throws Exception {
-        String body = mvc.perform(post("/accounts").with(customer)).andReturn().getResponse().getContentAsString();
+        String body = mvc.perform(post("/accounts")).andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.accountId");
     }
 
@@ -278,24 +226,13 @@ class BankingApiAcceptanceTest {
     }
 
     private ResultActions moneyRequest(String accountId, String operation, String amount) throws Exception {
-        return moneyRequest(ALICE, accountId, operation, amount);
-    }
-
-    private ResultActions moneyRequest(RequestPostProcessor customer, String accountId, String operation, String amount)
-            throws Exception {
         return mvc.perform(post("/accounts/{id}/{operation}", accountId, operation)
-                .with(customer)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"amount\": %s}".formatted(amount)));
     }
 
     private ResultActions transfer(String from, String to, String amount) throws Exception {
-        return transfer(ALICE, from, to, amount);
-    }
-
-    private ResultActions transfer(RequestPostProcessor customer, String from, String to, String amount) throws Exception {
         return mvc.perform(post("/transfers")
-                .with(customer)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"fromAccountId\": \"%s\", \"toAccountId\": \"%s\", \"amount\": %s}".formatted(from, to, amount)));
     }

@@ -31,7 +31,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class BankingServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-04-20T09:00:00Z");
-    private static final String OWNER = "alice";
 
     private final BankingService bank = new BankingService(
             new InMemoryAccountRepository(), Clock.fixed(NOW, ZoneOffset.UTC));
@@ -41,22 +40,17 @@ class BankingServiceTest {
 
         @Test
         void gives_each_account_a_unique_id() {
-            Account first = bank.openAccount(OWNER);
-            Account second = bank.openAccount(OWNER);
+            Account first = bank.openAccount();
+            Account second = bank.openAccount();
 
             assertThat(first.id()).isNotEqualTo(second.id());
         }
 
         @Test
         void starts_with_a_zero_balance() {
-            Account account = bank.openAccount(OWNER);
+            Account account = bank.openAccount();
 
             assertThat(bank.balanceOf(account.id())).isEqualByComparingTo("0");
-        }
-
-        @Test
-        void belongs_to_the_customer_who_opened_it() {
-            assertThat(bank.openAccount(OWNER).isOwnedBy(OWNER)).isTrue();
         }
     }
 
@@ -65,7 +59,7 @@ class BankingServiceTest {
 
         @Test
         void are_timestamped_with_the_current_time() {
-            String id = bank.openAccount(OWNER).id();
+            String id = bank.openAccount().id();
 
             LedgerEntry entry = bank.deposit(id, Amount.of("25.00"));
 
@@ -74,7 +68,7 @@ class BankingServiceTest {
 
         @Test
         void are_reflected_in_balance_and_history() {
-            String id = bank.openAccount(OWNER).id();
+            String id = bank.openAccount().id();
 
             bank.deposit(id, Amount.of("100.00"));
             bank.withdraw(id, Amount.of("40.00"));
@@ -87,7 +81,7 @@ class BankingServiceTest {
 
         @Test
         void cannot_overdraw_an_account() {
-            String id = bank.openAccount(OWNER).id();
+            String id = bank.openAccount().id();
 
             assertThatThrownBy(() -> bank.withdraw(id, Amount.of("0.01")))
                     .isInstanceOf(InsufficientFundsException.class);
@@ -111,7 +105,7 @@ class BankingServiceTest {
         @Test
         void appear_in_both_ledgers_under_one_transaction_id() {
             String alice = accountWithBalance("100.00");
-            String bob = bank.openAccount(OWNER).id();
+            String bob = bank.openAccount().id();
 
             Transfer transfer = bank.transfer(alice, bob, Amount.of("30.00"));
 
@@ -128,7 +122,7 @@ class BankingServiceTest {
         @Test
         void that_would_overdraw_the_sender_change_neither_account() {
             String alice = accountWithBalance("10.00");
-            String bob = bank.openAccount(OWNER).id();
+            String bob = bank.openAccount().id();
 
             assertThatThrownBy(() -> bank.transfer(alice, bob, Amount.of("10.01")))
                     .isInstanceOf(InsufficientFundsException.class);
@@ -225,7 +219,7 @@ class BankingServiceTest {
     }
 
     private String accountWithBalance(String balance) {
-        String id = bank.openAccount(OWNER).id();
+        String id = bank.openAccount().id();
         bank.deposit(id, Amount.of(balance));
         return id;
     }
