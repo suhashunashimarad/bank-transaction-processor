@@ -10,15 +10,21 @@ import java.util.UUID;
 public class Account {
 
     private final String id;
+    private final String ownerId;
     private BigDecimal balance = new BigDecimal("0.00");
     private final List<LedgerEntry> ledger = new ArrayList<>();
 
-    public Account(String id) {
+    public Account(String id, String ownerId) {
         this.id = Objects.requireNonNull(id, "id");
+        this.ownerId = Objects.requireNonNull(ownerId, "ownerId");
     }
 
     public String id() {
         return id;
+    }
+
+    public boolean isOwnedBy(String customerId) {
+        return ownerId.equals(customerId);
     }
 
     public synchronized BigDecimal balance() {

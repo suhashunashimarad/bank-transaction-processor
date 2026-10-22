@@ -8,9 +8,23 @@ transfers between them, keeping a timestamped ledger per account.
 Requires Java 21. The Maven wrapper is included.
 
 ```bash
-./mvnw test                 # 53 tests: domain, service (incl. concurrency) and HTTP acceptance
-./mvnw spring-boot:run      # starts on http://localhost:8080
+./mvnw test                 # 60 tests: domain, service (incl. concurrency) and HTTP acceptance
+JWT_ISSUER_URI=https://your-idp/realms/bank ./mvnw spring-boot:run   # starts on http://localhost:8080
 ```
+
+## Authentication and authorisation
+
+The service is an OAuth2 resource server. Every request needs an `Authorization: Bearer <JWT>`
+header issued by the identity provider at `JWT_ISSUER_URI` (any OIDC provider - Keycloak,
+Cognito, Entra ID). The token's `sub` claim identifies the customer.
+
+| Rule | Result |
+|---|---|
+| No token, or an invalid/expired one | 401 |
+| Opening an account | The caller becomes its owner |
+| Balance, history, deposit, withdrawal on an account you don't own | 403 |
+| Transfer *out of* an account you don't own | 403 |
+| Transfer *into* someone else's account | Allowed - that is how payments work |
 
 ## API
 
@@ -28,6 +42,8 @@ Errors are returned as [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) proble
 | Status | When                                                                    |
 |--------|-------------------------------------------------------------------------|
 | 400    | Amount is missing, zero, negative or has fractions of a penny; transfer to self; malformed body |
+| 401    | Missing or invalid bearer token                                         |
+| 403    | The caller does not own the account being read or debited               |
 | 404    | An account in the request does not exist                                |
 | 422    | The request is valid, but the account cannot afford it (overdraft)     |
 
@@ -49,6 +65,7 @@ domain/          Amount, Account, LedgerEntry - the rules live here, no Spring d
 service/         BankingService - finds accounts, stamps time, coordinates transfers
 infrastructure/  InMemoryAccountRepository
 api/             Controllers, request/response records, error mapping
+security/        JWT resource-server config, account ownership checks
 ```
 \* apart from `@Nullable` used as documentation on `LedgerEntry`.
 
@@ -89,6 +106,16 @@ timebox. The interface is the seam where a database implementation would go.
 **No mocks.** The in-memory repository is a real, fast implementation, so service tests exercise
 real behaviour instead of verifying interactions.
 
+**Authentication is delegated to an identity provider; the service only validates JWTs.**
+No passwords or user store live here. The service is stateless (no session, CSRF disabled
+because there are no cookies), so it scales horizontally without sticky sessions.
+
+**Ownership is a domain fact, the check is a web concern.** `Account` records its owner and
+answers `isOwnedBy`; `security/AccountAccess` applies it via `@PreAuthorize` on each endpoint.
+For an unknown account the check passes so the service still returns 404 - account ids are
+random UUIDs, so this does not help anyone enumerate accounts. Only the debited side of a
+transfer is checked: paying into another customer's account is the point of a transfer.
+
 ## What I learned while iterating
 
 - The first version of the concurrency helper used `try (ExecutorService ...)`. To check the
@@ -111,5 +138,6 @@ real behaviour instead of verifying interactions.
 | No idempotency | A client retrying a timed-out POST could deposit/transfer twice | `Idempotency-Key` header stored with the transaction |
 | Single currency (GBP implied) | Multi-currency needs FX rules | Add `Currency` to `Amount`, reject cross-currency operations |
 | Unbounded history endpoint | Large ledgers return everything | Pagination and date-range filtering |
-| No authentication/authorisation | Anyone can move anyone's money | OAuth2 resource server, account ownership checks |
+| Ownership only, no roles | Staff (support, audit) cannot view customer accounts | Map a scope/role claim to authorities and allow read-only access for it in `AccountAccess` |
+| Single owner per account | No joint accounts | Replace `ownerId` with a set of holders |
 | Balance stored alongside ledger | Two representations of the same truth | Could derive balance from the ledger (event-sourced) with snapshots |
